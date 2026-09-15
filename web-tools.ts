@@ -34,6 +34,7 @@ import {
   FAIL_TTL_MS,
   isSafeKey,
   type PageCacheEntry,
+  type SearchCacheEntry,
   type SearchResult,
   searchCacheKey,
 } from "./cache.ts";
@@ -219,6 +220,24 @@ function fetchFailureMessage(
   return lines.join("\n");
 }
 
+/**
+ * Build a failure message for a search whose durable 4xx failure is cached
+ * (thrown, per the AgentToolResult contract). Auth, rate-limit, transport, and
+ * server failures never reach here: they are not negative-cached.
+ */
+function searchFailureMessage(query: string, entry: SearchCacheEntry, failureState: "cached" | "live-cached"): string {
+  const lines = [
+    `Ollama Cloud search failed: ${query}`,
+    `API error: ${entry.error}`,
+    failureState === "cached"
+      ? `Status: from cache (failure cached for ${FAIL_TTL_MINUTES} min; pass refresh=true to force a live retry)`
+      : `Status: live request failed (failure cached for ${FAIL_TTL_MINUTES} min; pass refresh=true to force a live retry)`,
+    "Likely cause: the search API rejected the request (durable client error).",
+    "Suggestion: simplify or rephrase the query, then retry; pass refresh=true to force a live retry.",
+  ];
+  return lines.join("\n");
+}
+
 // --- Registrations ---
 
 export function registerWebSearchTool(pi: ExtensionAPI, cacheStore: CacheStore = defaultCache) {
@@ -230,6 +249,7 @@ export function registerWebSearchTool(pi: ExtensionAPI, cacheStore: CacheStore =
       `Returns up to max_results results (default 5, max 10; title, URL, ${SNIPPET_LIMIT}-char snippet; [truncated] means the source is longer — ` +
       "pass expand=<index> to get that result's full content from the cached search, 0 extra API calls). " +
       `Results are cached for ${SUCCESS_TTL_HOURS}h: the same query within that window costs 0 API calls. ` +
+      `A search that fails with a durable error is negative-cached for ${FAIL_TTL_MINUTES} min — retrying it within that window costs 0 API calls and fails the same way; pass refresh=true to force a live retry. ` +
       "Pass refresh=true to bypass the cache and re-call the API (e.g. results look stale). " +
       "Requires an Ollama Cloud API key.",
     parameters: Type.Object({
@@ -271,13 +291,19 @@ export function registerWebSearchTool(pi: ExtensionAPI, cacheStore: CacheStore =
       let live = false;
       let results: SearchResult[];
 
+      if (!params.refresh && cacheStore.isFresh(cached) && cached?.error) {
+        // A durable 4xx failure is negative-cached; surface it without
+        // re-calling the API.
+        throw new Error(searchFailureMessage(params.query, cached, "cached"));
+      }
+
       // A cached search serves any request at or below the count it was fetched
       // with (results are ranked, so a top-N slice is faithful); asking for more
       // than was stored re-runs the search live and replaces the entry. Legacy
       // entries without a maxResults field count as their stored result count.
-      const storedCount = cached?.maxResults ?? cached?.results.length ?? 0;
-      if (!params.refresh && cacheStore.isFresh(cached) && storedCount >= maxResults) {
-        results = cached!.results.slice(0, maxResults);
+      const storedCount = cached?.maxResults ?? cached?.results?.length ?? 0;
+      if (!params.refresh && cacheStore.isFresh(cached) && cached?.results && storedCount >= maxResults) {
+        results = cached.results.slice(0, maxResults);
       } else {
         live = true;
         const res = await fetchJsonWithTimeout<SearchResponse>(
@@ -303,6 +329,20 @@ export function registerWebSearchTool(pi: ExtensionAPI, cacheStore: CacheStore =
             throw new Error(
               `Ollama Cloud search failed: transport error (${res.error ?? "unknown"}). Not cached; the next call retries the API.`,
             );
+          }
+          // Durable 4xx failures (bad request, unsupported endpoint, ...) are
+          // negative-cached exactly like page fetches; auth, rate-limit, and
+          // server errors let the next retry through immediately.
+          const failure: SearchCacheEntry = {
+            ts: Date.now(),
+            q: params.query,
+            status: res.status,
+            error: `HTTP ${res.status}: ${res.error ?? "unknown error"}`,
+          };
+          if (res.status < 500 && res.status !== 401 && res.status !== 403 && res.status !== 429) {
+            cache.searches[key] = failure;
+            cacheStore.saveCache();
+            throw new Error(searchFailureMessage(params.query, failure, "live-cached"));
           }
           httpError("search", res.status, res.error);
         }

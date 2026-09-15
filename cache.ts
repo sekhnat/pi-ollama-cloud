@@ -20,9 +20,14 @@ export interface SearchResult {
 export interface SearchCacheEntry {
   ts: number;
   q: string;
-  /** The max_results the search was fetched with; a cached search serves any smaller request. */
+  /** The max_results the successful search was fetched with; a cached search serves any smaller request. */
   maxResults?: number;
-  results: SearchResult[];
+  /** Present on successful searches: the ranked results that were fetched. */
+  results?: SearchResult[];
+  /** HTTP status of a negative-cached failure. */
+  status?: number;
+  /** Non-empty on a negative-cached failure. */
+  error?: string;
 }
 
 export interface PageCacheEntry {
@@ -60,17 +65,23 @@ export function isSafeKey(key: string): boolean {
 
 /** Shallow shape checks so a partially corrupted cache file degrades instead of crashing tool calls. */
 function isSearchEntry(v: unknown): v is SearchCacheEntry {
-  return (
-    isRecord(v) &&
-    typeof v.ts === "number" &&
-    typeof v.q === "string" &&
+  if (!isRecord(v) || typeof v.ts !== "number" || typeof v.q !== "string") return false;
+  const fieldsValid =
     (v.maxResults === undefined ||
       (typeof v.maxResults === "number" && Number.isInteger(v.maxResults) && v.maxResults > 0)) &&
-    Array.isArray(v.results) &&
-    v.results.every(
-      (r) => isRecord(r) && typeof r.title === "string" && typeof r.url === "string" && typeof r.content === "string",
-    )
-  );
+    (v.status === undefined || typeof v.status === "number") &&
+    (v.results === undefined ||
+      (Array.isArray(v.results) &&
+        v.results.every(
+          (r) =>
+            isRecord(r) && typeof r.title === "string" && typeof r.url === "string" && typeof r.content === "string",
+        ))) &&
+    (v.error === undefined || (typeof v.error === "string" && v.error !== ""));
+  if (!fieldsValid) return false;
+  // Must be either a real failure or a real success; anything else (e.g. an
+  // entry with neither results nor a non-empty error) would render as a fake
+  // empty success.
+  return (typeof v.error === "string" && v.error !== "") || Array.isArray(v.results);
 }
 
 function isPageEntry(v: unknown): v is PageCacheEntry {

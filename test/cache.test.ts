@@ -32,7 +32,7 @@ describe("loadCache/saveCache", () => {
 
     const mod2 = createCache({ path: join(dir, "cache.json") });
     const c2 = mod2.loadCache();
-    expect(c2.searches.k.results[0].title).toBe("t");
+    expect(c2.searches.k.results?.[0].title).toBe("t");
     expect(c2.pages["https://dead"].error).toBe("HTTP 404");
     rmSync(dir, { recursive: true, force: true });
   });
@@ -63,6 +63,22 @@ describe("loadCache/saveCache", () => {
     const c = mod.loadCache();
     expect(Object.keys(c.searches)).toEqual(["good"]);
     expect(Object.keys(c.pages)).toEqual(["https://good"]);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("keeps search failure entries and drops degenerate ones", async () => {
+    const { mod, dir } = await freshCache();
+    const poisoned = {
+      searches: {
+        failure: { ts: Date.now(), q: "q", status: 400, error: "HTTP 400: bad request" },
+        degenerate: { ts: Date.now(), q: "q" },
+        badStatus: { ts: Date.now(), q: "q", error: "x", status: "400" },
+      },
+      pages: {},
+    };
+    writeFileSync(join(dir, "cache.json"), JSON.stringify(poisoned));
+    const c = mod.loadCache();
+    expect(Object.keys(c.searches)).toEqual(["failure"]);
     rmSync(dir, { recursive: true, force: true });
   });
 

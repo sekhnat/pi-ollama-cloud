@@ -307,4 +307,71 @@ describe("web tool cache and paging", () => {
     expect(out).toContain("# from cache");
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it("does not serve an expired cached search", async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ results: [{ title: "Fresh", url: "https://e.com", content: "live" }] }), {
+          status: 200,
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { execute } = await setupTools((data) => {
+      data.searches[searchCacheKey("stale")] = {
+        ts: Date.now() - 25 * 60 * 60 * 1000, // older than the 24h success TTL
+        q: "stale",
+        maxResults: 5,
+        results: [{ title: "Stale", url: "https://e.com", content: "stale content" }],
+      };
+    });
+
+    const out = output(await execute("ollama_web_search", { query: "stale" }));
+    expect(out).toContain("Fresh");
+    expect(out).toContain("# live query");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("negative-caches a durable search failure", async () => {
+    const fetchMock = vi.fn(async () => new Response("bad request", { status: 400 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { execute } = await setupTools();
+
+    await expect(execute("ollama_web_search", { query: "q" })).rejects.toThrow("failure cached");
+    // The retry within the failure TTL is served from the cache (0 API calls),
+    // for any max_results: failures are keyed by query only.
+    await expect(execute("ollama_web_search", { query: "q", max_results: 3 })).rejects.toThrow("from cache");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not negative-cache search auth, rate-limit, or server failures", async () => {
+    for (const status of [401, 429, 500]) {
+      const fetchMock = vi.fn(async () => new Response("boom", { status }));
+      vi.stubGlobal("fetch", fetchMock);
+      const { execute } = await setupTools();
+
+      await expect(execute("ollama_web_search", { query: "q" })).rejects.toThrow();
+      await expect(execute("ollama_web_search", { query: "q" })).rejects.toThrow();
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    }
+  });
+
+  it("refresh=true forces a live retry of a cached search failure", async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ results: [{ title: "Back", url: "https://e.com", content: "recovered" }] }), {
+          status: 200,
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { execute } = await setupTools();
+
+    fetchMock.mockImplementationOnce(async () => new Response("bad request", { status: 400 }));
+    await expect(execute("ollama_web_search", { query: "q" })).rejects.toThrow("failure cached");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const retried = output(await execute("ollama_web_search", { query: "q", refresh: true }));
+    expect(retried).toContain("recovered");
+    expect(retried).toContain("# live query");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });
