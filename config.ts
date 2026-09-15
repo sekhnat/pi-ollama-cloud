@@ -61,16 +61,38 @@ function isValidConfigValue(value: unknown, expectedType: string): boolean {
   return typeof value === expectedType;
 }
 
+/** Human description of an expected config value, for warning messages. */
+function expectedValueDescription(expectedType: string): string {
+  return expectedType === "usageDisplay" ? `"sidebar", "statusbar", or "off"` : "a boolean";
+}
+
 /**
  * Validate a parsed JSON object against the known schema.
- * Unknown keys are silently dropped; values with wrong types fall back to undefined.
+ * Unknown keys and values with wrong types are dropped, each with a warning
+ * naming the offending key so typos (e.g. "webtools") surface instead of
+ * silently applying defaults. null means explicitly unset and is skipped
+ * without a warning.
  */
-function sanitizeConfig(raw: Record<string, unknown>): OllamaCloudConfig {
+function sanitizeConfig(raw: Record<string, unknown>, source: string): OllamaCloudConfig {
   const out: OllamaCloudConfig = {};
+  for (const key of Object.keys(raw)) {
+    if (!Object.hasOwn(CONFIG_SCHEMA, key)) {
+      console.warn(
+        `[pi-ollama-cloud] Unknown config key "${key}" in ${source}; ignoring it. ` +
+          `Valid keys: ${Object.keys(CONFIG_SCHEMA).join(", ")}.`,
+      );
+    }
+  }
   for (const [key, expectedType] of Object.entries(CONFIG_SCHEMA)) {
     const value = raw[key];
+    if (value === null || value === undefined) continue;
     if (isValidConfigValue(value, expectedType)) {
       (out as Record<string, unknown>)[key] = value;
+    } else {
+      console.warn(
+        `[pi-ollama-cloud] Invalid value for "${key}" in ${source} ` +
+          `(expected ${expectedValueDescription(expectedType)}); ignoring it.`,
+      );
     }
   }
   return out;
@@ -110,7 +132,7 @@ export function loadConfig(cwd: string): OllamaCloudConfig {
       // Silently skip files that parse to null, arrays, or primitives —
       // malformed config should not crash the extension (defaults apply).
       if (parsed != null && typeof parsed === "object" && !Array.isArray(parsed)) {
-        globalConfig = sanitizeConfig(parsed as Record<string, unknown>);
+        globalConfig = sanitizeConfig(parsed as Record<string, unknown>, globalPath);
       }
     } catch (err) {
       console.error(`[pi-ollama-cloud] Failed to load config from ${globalPath}: ${err}`);
@@ -124,7 +146,7 @@ export function loadConfig(cwd: string): OllamaCloudConfig {
       const parsed = JSON.parse(content);
       // Same guard as global config: null/array/primitive parses are ignored.
       if (parsed != null && typeof parsed === "object" && !Array.isArray(parsed)) {
-        projectConfig = sanitizeConfig(parsed as Record<string, unknown>);
+        projectConfig = sanitizeConfig(parsed as Record<string, unknown>, projectPath);
       }
     } catch (err) {
       console.error(`[pi-ollama-cloud] Failed to load config from ${projectPath}: ${err}`);
