@@ -7,6 +7,7 @@
  *
  * Environment variables serve as overrides above both config files:
  *   - PI_OLLAMA_WEB_TOOLS=0  disables web tool registration
+ *   - PI_OLLAMA_USAGE_DISPLAY=sidebar|statusbar|off  overrides the usage display
  *
  * Example ollama-cloud.json:
  * ```json
@@ -160,13 +161,34 @@ export function loadConfig(cwd: string): OllamaCloudConfig {
     ...projectConfig,
   };
 
-  // Environment variable overrides (only webTools for now)
+  // Environment variable overrides
   const envOverride = resolveWebToolsEnv();
   if (envOverride !== undefined) {
     merged.webTools = envOverride;
   }
+  const envUsageDisplay = resolveUsageDisplayEnv();
+  if (envUsageDisplay !== undefined) {
+    merged.usageDisplay = envUsageDisplay;
+  }
 
   return merged;
+}
+
+/**
+ * Resolve the PI_OLLAMA_USAGE_DISPLAY environment variable override.
+ * Returns undefined when unset or blank, the mode when valid, and undefined
+ * (with a warning) for any other value.
+ */
+export function resolveUsageDisplayEnv(): UsageDisplay | undefined {
+  const raw = process.env.PI_OLLAMA_USAGE_DISPLAY;
+  if (raw === undefined) return undefined;
+  const lowered = raw.trim().toLowerCase();
+  if (lowered === "") return undefined;
+  if (USAGE_DISPLAY_VALUES.has(lowered)) return lowered as UsageDisplay;
+  console.warn(
+    `[pi-ollama-cloud] Ignoring PI_OLLAMA_USAGE_DISPLAY="${raw}": expected "sidebar", "statusbar", or "off".`,
+  );
+  return undefined;
 }
 
 /**

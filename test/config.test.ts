@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { loadConfig, type OllamaCloudConfig, resolveUsageDisplay } from "../config.ts";
+import { loadConfig, type OllamaCloudConfig, resolveUsageDisplay, resolveUsageDisplayEnv } from "../config.ts";
 
 describe("resolveUsageDisplay", () => {
   it("defaults to sidebar when neither key is set", () => {
@@ -35,6 +35,7 @@ function spyWarn() {
 describe("config files", () => {
   const originalAgentDir = process.env.PI_CODING_AGENT_DIR;
   const originalWebToolsEnv = process.env.PI_OLLAMA_WEB_TOOLS;
+  const originalUsageDisplayEnv = process.env.PI_OLLAMA_USAGE_DISPLAY;
   let warn: ReturnType<typeof spyWarn>;
   let agentDir = "";
   let projectDir = "";
@@ -46,6 +47,7 @@ describe("config files", () => {
     // depend on the developer machine's ~/.pi/agent/ollama-cloud.json.
     process.env.PI_CODING_AGENT_DIR = agentDir;
     delete process.env.PI_OLLAMA_WEB_TOOLS;
+    delete process.env.PI_OLLAMA_USAGE_DISPLAY;
     warn = spyWarn();
   });
 
@@ -54,6 +56,8 @@ describe("config files", () => {
     else process.env.PI_CODING_AGENT_DIR = originalAgentDir;
     if (originalWebToolsEnv === undefined) delete process.env.PI_OLLAMA_WEB_TOOLS;
     else process.env.PI_OLLAMA_WEB_TOOLS = originalWebToolsEnv;
+    if (originalUsageDisplayEnv === undefined) delete process.env.PI_OLLAMA_USAGE_DISPLAY;
+    else process.env.PI_OLLAMA_USAGE_DISPLAY = originalUsageDisplayEnv;
     warn.mockRestore();
     rmSync(agentDir, { recursive: true, force: true });
     rmSync(projectDir, { recursive: true, force: true });
@@ -104,5 +108,58 @@ describe("config files", () => {
     writeGlobalConfig({ webTools: true });
     writeProjectConfig({ webTools: false });
     expect(loadConfig(projectDir).webTools).toBe(false);
+  });
+
+  it("PI_OLLAMA_USAGE_DISPLAY overrides both config files", () => {
+    writeGlobalConfig({ usageDisplay: "off" });
+    writeProjectConfig({ usageDisplay: "sidebar" });
+    process.env.PI_OLLAMA_USAGE_DISPLAY = "statusbar";
+    expect(resolveUsageDisplay(loadConfig(projectDir))).toBe("statusbar");
+  });
+
+  it("falls back to config files when PI_OLLAMA_USAGE_DISPLAY is invalid", () => {
+    writeProjectConfig({ usageDisplay: "statusbar" });
+    process.env.PI_OLLAMA_USAGE_DISPLAY = "banana";
+    expect(resolveUsageDisplay(loadConfig(projectDir))).toBe("statusbar");
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("PI_OLLAMA_USAGE_DISPLAY"));
+  });
+});
+
+describe("resolveUsageDisplayEnv", () => {
+  const original = process.env.PI_OLLAMA_USAGE_DISPLAY;
+  let warn: ReturnType<typeof spyWarn>;
+
+  beforeEach(() => {
+    delete process.env.PI_OLLAMA_USAGE_DISPLAY;
+    warn = spyWarn();
+  });
+
+  afterEach(() => {
+    if (original === undefined) delete process.env.PI_OLLAMA_USAGE_DISPLAY;
+    else process.env.PI_OLLAMA_USAGE_DISPLAY = original;
+    warn.mockRestore();
+  });
+
+  it("returns undefined when unset or blank", () => {
+    expect(resolveUsageDisplayEnv()).toBeUndefined();
+    process.env.PI_OLLAMA_USAGE_DISPLAY = "  ";
+    expect(resolveUsageDisplayEnv()).toBeUndefined();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("maps valid values, trimming and lowercasing", () => {
+    process.env.PI_OLLAMA_USAGE_DISPLAY = "sidebar";
+    expect(resolveUsageDisplayEnv()).toBe("sidebar");
+    process.env.PI_OLLAMA_USAGE_DISPLAY = " StatusBar ";
+    expect(resolveUsageDisplayEnv()).toBe("statusbar");
+    process.env.PI_OLLAMA_USAGE_DISPLAY = "off";
+    expect(resolveUsageDisplayEnv()).toBe("off");
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("warns and returns undefined for invalid values", () => {
+    process.env.PI_OLLAMA_USAGE_DISPLAY = "banana";
+    expect(resolveUsageDisplayEnv()).toBeUndefined();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("PI_OLLAMA_USAGE_DISPLAY"));
   });
 });

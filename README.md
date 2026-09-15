@@ -96,6 +96,7 @@ Extension settings can be set via JSON config files. Project-local settings over
 
 | Setting | Type | Default | Description |
 |---|---|---|---|
+| `webTools` | boolean | `true` | Register the `ollama_web_search` and `ollama_web_fetch` tools. Set `false` to disable both; the provider and model list are unaffected |
 | `usageDisplay` | `"sidebar" \| "statusbar" \| "off"` | `"sidebar"` | Where usage is displayed. `sidebar` publishes a panel to the [Pi Atelier](https://github.com/michaelmjhhhh/pi-atelier) sidebar (falling back to the status bar when Atelier is not loaded) |
 | `usageStatus` | boolean | `false` | Legacy boolean: `true` maps to `statusbar`, `false` to `off`. Ignored when `usageDisplay` is set |
 
@@ -108,7 +109,10 @@ Example `ollama-cloud.json`:
 }
 ```
 
-The `PI_OLLAMA_WEB_TOOLS` environment variable still works as an override above config files. Set it to `0`, `false`, `no`, or `off` to disable web tools regardless of config file settings.
+Environment variables override both config files:
+
+- `PI_OLLAMA_WEB_TOOLS` — set to `0`, `false`, `no`, or `off` to disable web tools regardless of config file settings.
+- `PI_OLLAMA_USAGE_DISPLAY` — set to `sidebar`, `statusbar`, or `off` to override the usage display. Any other value is ignored with a warning.
 
 ### 4. Select a model
 
