@@ -1,6 +1,6 @@
 import type { ExtensionContext, ModelRegistry } from "@earendil-works/pi-coding-agent";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { getCloudApiKey, httpError } from "../utils.ts";
+import { envInt, getCloudApiKey, httpError } from "../utils.ts";
 
 // --- Helpers ---
 
@@ -86,5 +86,42 @@ describe("httpError", () => {
 
   it("includes the server error body when present", () => {
     expect(() => httpError("usage", 400, "bad request")).toThrow(/bad request/);
+  });
+});
+
+// ============================================================================
+// envInt
+// ============================================================================
+
+describe("envInt", () => {
+  const NAME = "PI_OLLAMA_UNIT_TEST_INT";
+
+  afterEach(() => {
+    delete process.env[NAME];
+  });
+
+  it("returns the fallback when unset or blank", () => {
+    expect(envInt(NAME, 24)).toBe(24);
+    process.env[NAME] = "";
+    expect(envInt(NAME, 24)).toBe(24);
+    process.env[NAME] = "  ";
+    expect(envInt(NAME, 24)).toBe(24);
+  });
+
+  it("parses a non-negative integer", () => {
+    process.env[NAME] = "7";
+    expect(envInt(NAME, 24)).toBe(7);
+  });
+
+  it("accepts 0 so cache-disabling values work (e.g. a TTL of 0)", () => {
+    process.env[NAME] = "0";
+    expect(envInt(NAME, 24)).toBe(0);
+  });
+
+  it("falls back on non-integers, negatives, and garbage", () => {
+    for (const bad of ["abc", "3.5", "-1"]) {
+      process.env[NAME] = bad;
+      expect(envInt(NAME, 24)).toBe(24);
+    }
   });
 });

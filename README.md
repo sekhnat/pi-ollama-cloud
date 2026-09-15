@@ -198,10 +198,10 @@ A failed fetch throws a diagnostic message (likely cause + next steps) instead o
 
 | Env var | Default | Meaning |
 |---|---|---|
-| `PI_OLLAMA_SEARCH_TTL_HOURS` | `24` | Success cache TTL |
-| `PI_OLLAMA_SEARCH_FAIL_TTL_MINUTES` | `15` | Failure (negative) cache TTL |
+| `PI_OLLAMA_SEARCH_TTL_HOURS` | `24` | Success cache TTL (0 disables caching) |
+| `PI_OLLAMA_SEARCH_FAIL_TTL_MINUTES` | `15` | Failure (negative) cache TTL (0 disables negative caching) |
 | `PI_OLLAMA_SEARCH_CACHE_PATH` | `<pi agent home>/cache/pi-ollama-cloud/cache.json` | Cache file location |
-| `PI_OLLAMA_SEARCH_MAX_ENTRIES` | `500` | Max cached entries per kind (searches/pages); oldest evicted beyond the cap |
+| `PI_OLLAMA_SEARCH_MAX_ENTRIES` | `500` | Max cached entries per kind (searches/pages); oldest evicted beyond the cap (0 disables caching) |
 | `PI_OLLAMA_SEARCH_SNIPPET_CHARS` | `500` | Search snippet length |
 | `PI_OLLAMA_SEARCH_CHUNK_CHARS` | `3000` | Fetch chunk size |
 

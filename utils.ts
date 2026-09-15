@@ -112,8 +112,12 @@ export function httpError(op: string, status: number, error?: string): never {
   );
 }
 
-/** Parse a positive-integer env var, falling back when unset or invalid (NaN, non-integer, <= 0). */
+/** Parse a non-negative-integer env var. 0 is accepted so a TTL or entry cap
+ * of 0 can disable a feature; falls back when unset, blank, or invalid (NaN,
+ * non-integer, negative). */
 export function envInt(name: string, fallback: number): number {
-  const value = Number(process.env[name]);
-  return Number.isInteger(value) && value > 0 ? value : fallback;
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === "") return fallback;
+  const value = Number(raw);
+  return Number.isInteger(value) && value >= 0 ? value : fallback;
 }
