@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - Exclude machine-owned `.pi/` state from Biome via `vcs.useIgnoreFile` so local lint runs don't fail on pi runtime cache files.
 - The cache tuning env vars (`PI_OLLAMA_SEARCH_TTL_HOURS`, `PI_OLLAMA_SEARCH_FAIL_TTL_MINUTES`, `PI_OLLAMA_SEARCH_MAX_ENTRIES`) now accept 0 to disable caching instead of silently falling back to the default.
 - `ollama_web_fetch` rejects malformed or non-http(s) URLs locally with a diagnostic before any API call (the typebox `format: "uri"` is annotation-only and is not enforced at runtime).
+- `ollama_web_search` results are cached independently of `max_results`: a cached search serves any smaller request (including `expand`) without a new API call; only asking for more results than were fetched re-runs the search. Legacy cached entries keep working.
 
 ## [0.12.1] - 2026-09-14
 

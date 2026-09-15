@@ -152,13 +152,13 @@ describe("isFresh", () => {
 });
 
 describe("searchCacheKey", () => {
-  it("is stable for the same query and max_results", async () => {
+  it("is stable for the same query", async () => {
     await freshCache();
-    expect(searchCacheKey("q", 5)).toBe(searchCacheKey("q", 5));
+    expect(searchCacheKey("q")).toBe(searchCacheKey("q"));
   });
 
-  it("differs when max_results differs", async () => {
+  it("differs between queries", async () => {
     await freshCache();
-    expect(searchCacheKey("q", 5)).not.toBe(searchCacheKey("q", 10));
+    expect(searchCacheKey("q")).not.toBe(searchCacheKey("other"));
   });
 });

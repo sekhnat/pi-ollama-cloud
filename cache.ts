@@ -20,6 +20,8 @@ export interface SearchResult {
 export interface SearchCacheEntry {
   ts: number;
   q: string;
+  /** The max_results the search was fetched with; a cached search serves any smaller request. */
+  maxResults?: number;
   results: SearchResult[];
 }
 
@@ -62,6 +64,8 @@ function isSearchEntry(v: unknown): v is SearchCacheEntry {
     isRecord(v) &&
     typeof v.ts === "number" &&
     typeof v.q === "string" &&
+    (v.maxResults === undefined ||
+      (typeof v.maxResults === "number" && Number.isInteger(v.maxResults) && v.maxResults > 0)) &&
     Array.isArray(v.results) &&
     v.results.every(
       (r) => isRecord(r) && typeof r.title === "string" && typeof r.url === "string" && typeof r.content === "string",
@@ -176,6 +180,6 @@ export const loadCache = defaultCache.loadCache;
 export const saveCache = defaultCache.saveCache;
 export const isFresh = defaultCache.isFresh;
 
-export function searchCacheKey(query: string, maxResults: number): string {
-  return createHash("sha1").update(`${query}\n${maxResults}`).digest("hex");
+export function searchCacheKey(query: string): string {
+  return createHash("sha1").update(query).digest("hex");
 }

@@ -182,7 +182,7 @@ Returns up to 5 results by default (`max_results`, max 10; title, URL, 500-char 
 
 The search API returns each result's full content; it is cached in full, so a truncated result can be expanded without a separate fetch:
 
-- `expand=<index>` — return the full content of that result (1-based) from the cached search, 0 extra API calls. The cache key includes `max_results`, so expanding hits the cache only when the query was searched with the same `max_results`; otherwise the search runs live first.
+- `expand=<index>` — return the full content of that result (1-based) from the cached search, 0 extra API calls. Searches are cached independently of `max_results`: a cached search serves any request at or below the count it was fetched with (including `expand`); asking for more results than were fetched re-runs the search live.
 - Use `ollama_web_fetch` only when the search result's content is not enough (e.g. you need a different page, or the search excerpt is shorter than the full page).
 
 ### `ollama_web_fetch`

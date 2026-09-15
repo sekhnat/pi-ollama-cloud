@@ -266,13 +266,18 @@ export function registerWebSearchTool(pi: ExtensionAPI, cacheStore: CacheStore =
 
       const maxResults = params.max_results ?? 5;
       const cache = cacheStore.loadCache();
-      const key = searchCacheKey(params.query, maxResults);
+      const key = searchCacheKey(params.query);
       const cached = cache.searches[key];
       let live = false;
       let results: SearchResult[];
 
-      if (!params.refresh && cacheStore.isFresh(cached)) {
-        results = cached!.results;
+      // A cached search serves any request at or below the count it was fetched
+      // with (results are ranked, so a top-N slice is faithful); asking for more
+      // than was stored re-runs the search live and replaces the entry. Legacy
+      // entries without a maxResults field count as their stored result count.
+      const storedCount = cached?.maxResults ?? cached?.results.length ?? 0;
+      if (!params.refresh && cacheStore.isFresh(cached) && storedCount >= maxResults) {
+        results = cached!.results.slice(0, maxResults);
       } else {
         live = true;
         const res = await fetchJsonWithTimeout<SearchResponse>(
@@ -310,7 +315,7 @@ export function registerWebSearchTool(pi: ExtensionAPI, cacheStore: CacheStore =
           url: r.url,
           content: r.content,
         }));
-        cache.searches[key] = { ts: Date.now(), q: params.query, results };
+        cache.searches[key] = { ts: Date.now(), q: params.query, maxResults, results };
         cacheStore.saveCache();
       }
 

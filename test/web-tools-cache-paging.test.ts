@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createCache } from "../cache.ts";
+import { type CacheData, createCache, searchCacheKey } from "../cache.ts";
 import { registerWebFetchTool, registerWebSearchTool } from "../web-tools.ts";
 
 type RegisteredTool = {
@@ -12,10 +12,11 @@ type RegisteredTool = {
 
 const tempDirs: string[] = [];
 
-async function setupTools() {
+async function setupTools(seed?: (data: CacheData) => void) {
   const dir = mkdtempSync(join(tmpdir(), "ollama-web-tools-"));
   tempDirs.push(dir);
   const cache = createCache({ path: join(dir, "cache.json") });
+  if (seed) seed(cache.loadCache());
   const tools = new Map<string, RegisteredTool>();
   const pi = { registerTool: (tool: RegisteredTool) => tools.set(tool.name, tool) };
   registerWebSearchTool(pi as any, cache);
@@ -246,6 +247,64 @@ describe("web tool cache and paging", () => {
 
     await expect(execute("ollama_web_fetch", { url: "file:///etc/passwd" })).rejects.toThrow("only http and https");
     await expect(execute("ollama_web_fetch", { url: "ftp://example.com/x" })).rejects.toThrow("only http and https");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("serves a smaller max_results from a cached search without a second API call", async () => {
+    const results = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((i) => ({
+      title: `R${i}`,
+      url: `https://example.com/${i}`,
+      content: `content ${i}`,
+    }));
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ results }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { execute } = await setupTools();
+
+    const first = output(await execute("ollama_web_search", { query: "q", max_results: 10 }));
+    expect(first).toContain("10. [complete] R10");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const smaller = output(await execute("ollama_web_search", { query: "q", max_results: 3 }));
+    expect(smaller).toContain("1. [complete] R1");
+    expect(smaller).toContain("3. [complete] R3");
+    expect(smaller).not.toContain("4. [complete]");
+    expect(smaller).toContain("# from cache");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-runs the search live when more results are requested than were cached", async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            results: [1, 2].map((i) => ({ title: `R${i}`, url: `https://e.com/${i}`, content: `c${i}` })),
+          }),
+          { status: 200 },
+        ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { execute } = await setupTools();
+
+    await execute("ollama_web_search", { query: "q", max_results: 2 });
+    const bigger = output(await execute("ollama_web_search", { query: "q", max_results: 5 }));
+    expect(bigger).toContain("# live query");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("serves legacy cached searches written before max_results was tracked", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { execute } = await setupTools((data) => {
+      data.searches[searchCacheKey("legacy")] = {
+        ts: Date.now(),
+        q: "legacy",
+        results: [{ title: "Legacy result", url: "https://e.com", content: "legacy content" }],
+      };
+    });
+
+    const out = output(await execute("ollama_web_search", { query: "legacy", max_results: 1 }));
+    expect(out).toContain("Legacy result");
+    expect(out).toContain("# from cache");
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
