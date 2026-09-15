@@ -207,7 +207,7 @@ A failed fetch throws a diagnostic message (likely cause + next steps) instead o
 |---|---|
 | `/ollama-webtools [on\|off\|enable\|disable]` | Enable or disable the `ollama_web_search` and `ollama_web_fetch` tools. Toggles if no argument given. |
 | `/ollama-cloud-usage` | Show Ollama Cloud usage limits (one section per limit bucket the API reports), per-model request counts, and the 4-week activity cost. |
-| `/ollama-usage-status [sidebar\|statusbar\|off\|on\|enable\|disable]` | Set the usage display. `on`/`enable`/toggling select the `sidebar` panel (statusbar fallback without Pi Atelier). |
+| `/ollama-usage-status [sidebar\|statusbar\|off\|on\|enable\|disable]` | Set the usage display. `on`/`enable`/toggling restore the last enabled mode (the `sidebar` default; statusbar falls back to the footer without Pi Atelier). |
 
 ## Usage display
 

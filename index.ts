@@ -39,18 +39,22 @@ const USAGE_USAGE = "Usage: /ollama-usage-status [sidebar|statusbar|off|on|enabl
 
 /**
  * Resolve the new display mode for /ollama-usage-status from its argument.
- * Enabling or toggling on selects the sidebar default. Exported for unit testing.
+ * `on`/`enable` and toggle-on restore `lastEnabled` (the most recent non-off
+ * mode this session; the sidebar default when none was set); `on` while
+ * already enabled keeps the current mode instead of switching destinations.
+ * Exported for unit testing.
  */
 export function resolveUsageStatusToggle(
   arg: string,
   current: UsageDisplayMode,
+  lastEnabled: UsageDisplayMode = "sidebar",
 ): { mode: UsageDisplayMode; error?: string } {
   const a = arg.trim().toLowerCase();
   if (a === "sidebar") return { mode: "sidebar" };
   if (a === "statusbar") return { mode: "statusbar" };
   if (a === "off" || a === "disable") return { mode: "off" };
-  if (a === "on" || a === "enable") return { mode: "sidebar" };
-  if (a === "") return { mode: current === "off" ? "sidebar" : "off" };
+  if (a === "on" || a === "enable") return { mode: current === "off" ? lastEnabled : current };
+  if (a === "") return { mode: current === "off" ? lastEnabled : "off" };
   return {
     mode: current,
     error: `Unknown argument "${arg.trim()}". ${USAGE_USAGE}`,
@@ -117,6 +121,9 @@ export default async function (pi: ExtensionAPI) {
   let configLoaded = false;
   let webToolsEnabled = false;
   let usageDisplay: UsageDisplayMode = "sidebar";
+  // The most recent non-off display mode this session; `on`/`enable`/toggle
+  // restore it so a statusbar user is not silently switched to the sidebar.
+  let lastEnabledUsageDisplay: UsageDisplayMode = "sidebar";
 
   pi.on("session_start", async (_event, ctx) => {
     if (!configLoaded) {
@@ -127,6 +134,7 @@ export default async function (pi: ExtensionAPI) {
         ensureWebToolsRegistered();
       }
       usageDisplay = resolveUsageDisplay(config);
+      lastEnabledUsageDisplay = usageDisplay === "off" ? "sidebar" : usageDisplay;
     }
     // On every session start (including resume/fork/new), re-apply the
     // runtime state. Tools may have been unregistered during teardown.
@@ -270,12 +278,13 @@ export default async function (pi: ExtensionAPI) {
       "Set the Ollama Cloud usage display: sidebar, statusbar, or off. " +
       "Also accepts on/off/enable/disable. Without argument, toggles.",
     handler: async (args, ctx) => {
-      const { mode, error } = resolveUsageStatusToggle(args, usageDisplay);
+      const { mode, error } = resolveUsageStatusToggle(args, usageDisplay, lastEnabledUsageDisplay);
       if (error) {
         ctx.ui.notify(error, "error");
         return;
       }
       usageDisplay = mode;
+      if (mode !== "off") lastEnabledUsageDisplay = mode;
 
       if (usageDisplay !== "off" && isOllamaCloud(ctx)) {
         startUsageStatus(ctx);
