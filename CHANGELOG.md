@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 - Add a `sidebar` usage display mode (new default): the extension publishes a structured `ollama-cloud:usage` panel to the Pi Atelier sidebar (visible by default after Atelier's Usage panel) and falls back to the footer status bar when no compatible Atelier host is loaded. New `usageDisplay` config key (`sidebar`/`statusbar`/`off`, default `sidebar`) overrides the legacy `usageStatus` boolean, which keeps its `true`→`statusbar`/`false`→`off` mapping. `/ollama-usage-status` accepts `sidebar`, `statusbar`, and `off` alongside the existing `on`/`off`/`enable`/`disable` forms; enabling or toggling restores the last enabled display mode (`sidebar` when none was set this session) instead of always selecting `sidebar`. Sidebar and footer output are mutually exclusive.
 - `ollama-cloud.json` keys that are unknown or hold invalid values now log a warning naming the key instead of being silently dropped, so typos like `"webtools"` are visible.
 - Add a `PI_OLLAMA_USAGE_DISPLAY` environment override (`sidebar`/`statusbar`/`off`) above both config files, matching `PI_OLLAMA_WEB_TOOLS`; invalid values are ignored with a warning.
+- Exclude machine-owned `.pi/` state from Biome via `vcs.useIgnoreFile` so local lint runs don't fail on pi runtime cache files.
 
 ## [0.12.1] - 2026-09-14
 
