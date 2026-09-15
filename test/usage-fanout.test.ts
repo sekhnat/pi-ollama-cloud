@@ -143,4 +143,46 @@ describe("usage display fan-out", () => {
     expect(registers(h.emitted)).toHaveLength(0);
     expect(h.statuses.get("ollama-usage")).toBeUndefined();
   });
+
+  it("unsubscribes the sidebar publisher on session_shutdown", async () => {
+    const h = makePi();
+    await ollamaExtension(h.pi as never);
+    discover(h, ["panel-defaults-v1"]);
+    await startSession(h);
+    await vi.waitFor(() => expect(registers(h.emitted).length).toBeGreaterThan(0));
+    expect(h.busHandlers.size).toBe(1);
+
+    for (const handler of h.eventHandlers.get("session_shutdown") ?? []) {
+      await handler(null, h.ctx);
+    }
+    // The publisher withdrew the panel and tore down its bus subscription.
+    expect(unregisters(h.emitted)).toHaveLength(1);
+    expect(h.busHandlers.size).toBe(0);
+    // A later discovery must not re-register the panel from the disposed instance.
+    discover(h, ["panel-defaults-v1"]);
+    expect(registers(h.emitted).length).toBe(1);
+  });
+
+  it("a re-invoked factory publishes again with a strictly higher revision", async () => {
+    const first = makePi();
+    await ollamaExtension(first.pi as never);
+    discover(first, ["panel-defaults-v1"]);
+    await startSession(first);
+    await vi.waitFor(() => expect(registers(first.emitted).length).toBeGreaterThan(0));
+    const firstRevision = registers(first.emitted).at(-1)?.revision as number;
+    for (const handler of first.eventHandlers.get("session_shutdown") ?? []) {
+      await handler(null, first.ctx);
+    }
+
+    // Simulated factory re-invocation (pi rebinds extensions after a session
+    // switch): the new instance subscribes fresh, and its revisions continue
+    // from the shared module-level clock.
+    const second = makePi();
+    await ollamaExtension(second.pi as never);
+    discover(second, ["panel-defaults-v1"]);
+    await startSession(second);
+    await vi.waitFor(() => expect(registers(second.emitted).length).toBeGreaterThan(0));
+    const secondRevision = registers(second.emitted).at(-1)?.revision as number;
+    expect(secondRevision).toBeGreaterThan(firstRevision);
+  });
 });

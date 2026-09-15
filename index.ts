@@ -265,6 +265,10 @@ export default async function (pi: ExtensionAPI) {
 
   pi.on("session_shutdown", async (_event, ctx) => {
     stopUsageStatus(ctx);
+    // Deterministically unsubscribe the sidebar publisher: pi rebinds extension
+    // instances after a session switch, but the event-bus subscription is ours
+    // to clean up. dispose() also withdraws if a panel is still published.
+    usagePanelPublisher.dispose();
   });
 
   const MODE_LABEL: Record<UsageDisplayMode, string> = {

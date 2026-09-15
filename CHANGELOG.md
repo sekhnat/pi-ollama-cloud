@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - `ollama_web_fetch` rejects malformed or non-http(s) URLs locally with a diagnostic before any API call (the typebox `format: "uri"` is annotation-only and is not enforced at runtime).
 - `ollama_web_search` results are cached independently of `max_results`: a cached search serves any smaller request (including `expand`) without a new API call; only asking for more results than were fetched re-runs the search. Legacy cached entries keep working.
 - `ollama_web_search` failures are negative-cached like page fetches: durable 4xx failures are cached for the failure TTL (15 min) keyed by query, so a retry costs 0 API calls; auth (401/403), rate-limit (429), transport, and server (5xx) failures always let a retry through.
+- The usage sidebar publisher now unsubscribes its event-bus listener on `session_shutdown` (`dispose()`) instead of leaving it attached for the rest of the pi runtime; a re-invoked extension factory publishes again with a strictly higher revision.
 
 ## [0.12.1] - 2026-09-14
 
