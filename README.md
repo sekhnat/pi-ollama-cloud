@@ -192,7 +192,7 @@ Returns the page title, a 3000-char slice of the content, and links. Long pages 
 - `offset=N` — continue reading from character N (the output tells you the next offset)
 - `full=true` — return all remaining content from `offset` in one call
 
-A failed fetch throws a diagnostic message (likely cause + next steps) instead of a bare error.
+A failed fetch throws a diagnostic message (likely cause + next steps) instead of a bare error. Malformed or non-http(s) URLs are rejected locally with a diagnostic before any API call.
 
 ### Tuning
 

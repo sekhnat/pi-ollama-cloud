@@ -152,6 +152,30 @@ export function isFetchResponse(data: unknown): data is FetchResponse {
   );
 }
 
+/**
+ * Validate a fetch target: absolute and http(s). The cloud fetcher only speaks
+ * http(s), and a clear local diagnostic beats burning an API call on a URL the
+ * API would reject or misinterpret (which would also negative-cache the URL).
+ * Throws a user-facing diagnostic otherwise.
+ */
+function requireHttpUrl(url: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(
+      `Ollama Cloud fetch failed: "${url}" is not a valid absolute URL. ` +
+        "Include the scheme, e.g. https://example.com/page.",
+    );
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error(
+      `Ollama Cloud fetch failed: only http and https URLs are supported (got "${parsed.protocol}"). ` +
+        "The cloud fetcher cannot reach this URL.",
+    );
+  }
+}
+
 /** Build a failure message with likely causes and next steps (thrown, per the AgentToolResult contract). */
 function fetchFailureMessage(
   url: string,
@@ -376,6 +400,7 @@ export function registerWebFetchTool(pi: ExtensionAPI, cacheStore: CacheStore = 
       ),
     }),
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+      requireHttpUrl(params.url);
       const apiKey = await getCloudApiKey(ctx);
       if (!apiKey) {
         noApiKeyError();

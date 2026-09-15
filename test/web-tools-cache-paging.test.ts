@@ -229,4 +229,23 @@ describe("web tool cache and paging", () => {
     expect(retried).toContain("# live query");
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  it("rejects a malformed URL locally without calling the API", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { execute } = await setupTools();
+
+    await expect(execute("ollama_web_fetch", { url: "not a url" })).rejects.toThrow("valid absolute URL");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects non-http(s) URLs locally without calling the API", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { execute } = await setupTools();
+
+    await expect(execute("ollama_web_fetch", { url: "file:///etc/passwd" })).rejects.toThrow("only http and https");
+    await expect(execute("ollama_web_fetch", { url: "ftp://example.com/x" })).rejects.toThrow("only http and https");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

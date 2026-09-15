@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 - Add a `PI_OLLAMA_USAGE_DISPLAY` environment override (`sidebar`/`statusbar`/`off`) above both config files, matching `PI_OLLAMA_WEB_TOOLS`; invalid values are ignored with a warning.
 - Exclude machine-owned `.pi/` state from Biome via `vcs.useIgnoreFile` so local lint runs don't fail on pi runtime cache files.
 - The cache tuning env vars (`PI_OLLAMA_SEARCH_TTL_HOURS`, `PI_OLLAMA_SEARCH_FAIL_TTL_MINUTES`, `PI_OLLAMA_SEARCH_MAX_ENTRIES`) now accept 0 to disable caching instead of silently falling back to the default.
+- `ollama_web_fetch` rejects malformed or non-http(s) URLs locally with a diagnostic before any API call (the typebox `format: "uri"` is annotation-only and is not enforced at runtime).
 
 ## [0.12.1] - 2026-09-14
 
