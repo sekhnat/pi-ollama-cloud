@@ -17,6 +17,7 @@ Registers Ollama Cloud as a model provider with dynamically fetched models, and 
 ## Prerequisites
 
 - An [Ollama Cloud API key](https://ollama.com)
+- Compatibility: tested against Pi **0.86.x** (peer dependencies accept any current Pi release; see the [changelog](CHANGELOG.md) for the verified version)
 
 ## Installation
 
